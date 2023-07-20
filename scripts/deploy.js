@@ -6,23 +6,53 @@
 // global scope, and execute the script.
 const hre = require("hardhat");
 
+async function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function main() {
-  const currentTimestampInSeconds = Math.round(Date.now() / 1000);
-  const unlockTime = currentTimestampInSeconds + 60;
+  const nftContract = await hre.ethers.deployContract("CryptoDevsNFT");
+  await nftContract.waitForDeployment();
+  console.log("CryptoDevsNFT deployed to: ", nftContract.target);
 
-  const lockedAmount = hre.ethers.parseEther("0.001");
+  const fakeNftMarketplaceContract = await hre.ethers.deployContract(
+    "FakeNFTMarketplace"
+  );
+  await fakeNftMarketplaceContract.waitForDeployment();
+  console.log(
+    "FakeNFTMarketplace deployed to:",
+    fakeNftMarketplaceContract.target
+  );
+  // Deploy the DAO Contract
+  const amount = hre.ethers.parseEther("0.01"); // You can change this value from 1 ETH to something else
+  const daoContract = hre.ethers.deployContract(
+    "CryptoDevsDAO",
+    [fakeNftMarketplaceContract.target, nftContract.target],
+    { value: amount }
+  );
+  (await daoContract).waitForDeployment;
 
-  const lock = await hre.ethers.deployContract("Lock", [unlockTime], {
-    value: lockedAmount,
+  console.log("CryptoDevsDAO deployed to:", daoContract.target);
+
+  await sleep(30 * 1000);
+
+  await hre.run("verify:verify", {
+    address: nftContract.target,
+    constructorArguments: [],
   });
 
-  await lock.waitForDeployment();
+  await hre.run("verify:verify", {
+    address: fakeNftMarketplaceContract.target,
+    constructorArguments: [],
+  });
 
-  console.log(
-    `Lock with ${ethers.formatEther(
-      lockedAmount
-    )}ETH and unlock timestamp ${unlockTime} deployed to ${lock.target}`
-  );
+  await hre.run("verify:verify", {
+    address: (await daoContract).target,
+    constructorArguments: [
+      fakeNftMarketplaceContract.target,
+      nftContract.target,
+    ],
+  });
 }
 
 // We recommend this pattern to be able to use async/await everywhere
